@@ -9,6 +9,7 @@
     "lint": "eslint",
     "seed": "DATA_MODE=demo tsx scripts/seed.ts",
     "demo": "npm run seed && npm run dev:demo",
+    "dev:demo": "DATA_MODE=demo next dev",
     "test": "vitest"
   },
   "dependencies": {

@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Cycle Weight Tracker
 
-## Getting Started
+A local-only Next.js app for logging daily weight and menstrual periods, then charting weight against estimated cycle phases.
 
-First, run the development server:
+See [CLAUDE.md](./CLAUDE.md) for the full spec, architecture rules, and build order.
+
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <this-repo-url>
+cd cycle-weight-tracker
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then pick one of the run modes below.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Running the app
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This app uses a real database (`dev.db`) by default, or a demo database (`demo.db`) filled with sample data — see [Data modes](#data-modes).
 
-## Learn More
+**With sample data (recommended for a first look):**
+```bash
+npm run demo
+```
+This regenerates realistic sample periods/weights and starts the dev server against `demo.db`.
 
-To learn more about Next.js, take a look at the following resources:
+**With your own real data:**
+```bash
+npm run dev
+```
+This starts the dev server against `dev.db`, which starts empty.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Either way, open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Data modes
 
-## Deploy on Vercel
+| Script | Database | What it does |
+| --- | --- | --- |
+| `npm run dev` | `dev.db` | Runs the app with your real data |
+| `npm run demo` | `demo.db` | Regenerates sample data, then runs the app with it |
+| `npm run dev:demo` | `demo.db` | Runs the app with whatever sample data is already there (skips reseeding) |
+| `npm run seed` | `demo.db` | Regenerates sample data only, without starting the app |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+`*.db` files are gitignored, so everyone who clones the repo starts with a clean `dev.db` and generates their own `demo.db` via `npm run seed`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Stack
+
+Next.js (App Router) + TypeScript, Tailwind CSS, SQLite (`better-sqlite3`), Recharts, date-fns
