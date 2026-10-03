@@ -163,4 +163,4 @@ Write tests first for: normal cycle, day boundaries, missing end date, single pe
 9. Chart
 10. Insight card + polish
 
-Nice to have if time allows: period calendar view, inline weight editing.
+Nice to have if time allows: period calendar view, inline weight editing, Vitest tests for `lib/weights.ts`/`lib/periods.ts` data functions against an in-memory `better-sqlite3` instance (not required now — `phases.ts`/`insights.ts` pure-logic tests are the priority).
