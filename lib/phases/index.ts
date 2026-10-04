@@ -109,11 +109,10 @@ export function getPhaseRanges(periods: Period[]): PhaseRange[] {
 
   return ranges;
 }
-
 export function getPhaseForDate(
   date: string,
   ranges: PhaseRange[]
-): Phase | null {
+): { phase: Phase; estimated: boolean } | null {
   const match = ranges.find((r) => date >= r.start && date <= r.end);
-  return match ? match.phase : null;
+  return match ? { phase: match.phase, estimated: match.estimated } : null;
 }
