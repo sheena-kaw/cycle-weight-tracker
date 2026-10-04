@@ -57,14 +57,14 @@ describe("getPhaseRanges", () => {
     ];
     const ranges = getPhaseRanges(periods);
 
-    expect(getPhaseForDate("2024-01-05", ranges)).toBe("menstrual");
-    expect(getPhaseForDate("2024-01-06", ranges)).toBe("follicular");
-    expect(getPhaseForDate("2024-01-14", ranges)).toBe("follicular");
-    expect(getPhaseForDate("2024-01-15", ranges)).toBe("ovulation");
-    expect(getPhaseForDate("2024-01-16", ranges)).toBe("ovulation");
-    expect(getPhaseForDate("2024-01-17", ranges)).toBe("luteal");
-    expect(getPhaseForDate("2024-01-28", ranges)).toBe("luteal");
-    expect(getPhaseForDate("2024-01-29", ranges)).toBe("menstrual");
+    expect(getPhaseForDate("2024-01-05", ranges)?.phase).toBe("menstrual");
+    expect(getPhaseForDate("2024-01-06", ranges)?.phase).toBe("follicular");
+    expect(getPhaseForDate("2024-01-14", ranges)?.phase).toBe("follicular");
+    expect(getPhaseForDate("2024-01-15", ranges)?.phase).toBe("ovulation");
+    expect(getPhaseForDate("2024-01-16", ranges)?.phase).toBe("ovulation");
+    expect(getPhaseForDate("2024-01-17", ranges)?.phase).toBe("luteal");
+    expect(getPhaseForDate("2024-01-28", ranges)?.phase).toBe("luteal");
+    expect(getPhaseForDate("2024-01-29", ranges)?.phase).toBe("menstrual");
   });
 
   it("defaults a missing end date to start + 4 days", () => {
@@ -137,5 +137,18 @@ describe("getPhaseForDate", () => {
 
   it("returns null when there are no ranges at all", () => {
     expect(getPhaseForDate("2024-01-01", [])).toBeNull();
+  });
+
+  it("reports whether the matched range is estimated", () => {
+    const periods = [
+      period(1, "2024-01-01", "2024-01-05"),
+      period(2, "2024-01-29", "2024-02-02"),
+    ];
+    const ranges = getPhaseRanges(periods);
+
+    // A date within the completed first cycle.
+    expect(getPhaseForDate("2024-01-10", ranges)?.estimated).toBe(false);
+    // A date within the last (current, projected) cycle.
+    expect(getPhaseForDate("2024-01-29", ranges)?.estimated).toBe(true);
   });
 });
