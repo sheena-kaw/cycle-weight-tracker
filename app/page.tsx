@@ -1,4 +1,4 @@
-import { WeightForm } from "@/components/WeightForm";
+import { WeightForm } from "@/components/weights/WeightForm";
 
 export default function Home() {
   return (
