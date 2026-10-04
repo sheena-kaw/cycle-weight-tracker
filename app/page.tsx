@@ -1,11 +1,14 @@
 import { format } from "date-fns";
 import { getPeriods } from "@/lib/periods";
 import { getPhaseRanges, getPhaseForDate } from "@/lib/phases";
+import { getWeights } from "@/lib/weights";
 import { WeightForm } from "@/components/weights/WeightForm";
+import { Chart } from "@/components/Chart";
 
 export default function Home() {
   const periods = getPeriods();
   const ranges = getPhaseRanges(periods);
+  const weights = getWeights();
   const today = format(new Date(), "yyyy-MM-dd");
   const todayStatus = getPhaseForDate(today, ranges);
 
@@ -31,7 +34,12 @@ export default function Home() {
         Phases are estimates based on logged periods, not medical advice.
       </p>
 
-      <h2 className="text-lg font-semibold mb-4">Log today&apos;s weight</h2>
+      <h2 className="text-lg font-semibold mb-4">Weight over time</h2>
+      <Chart weights={weights} ranges={ranges} />
+
+      <h2 className="text-lg font-semibold mb-4 mt-8">
+        Log today&apos;s weight
+      </h2>
       <WeightForm />
     </main>
   );
