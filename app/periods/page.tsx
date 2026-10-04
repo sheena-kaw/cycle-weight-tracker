@@ -1,6 +1,6 @@
 import { getPeriods } from "@/lib/periods";
-import { PeriodForm } from "@/components/PeriodForm";
-import { DeletePeriodButton } from "@/components/DeletePeriodButton";
+import { PeriodForm } from "@/components/periods/PeriodForm";
+import { DeletePeriodButton } from "@/components/periods/DeletePeriodButton";
 
 export default function PeriodsPage() {
   const periods = getPeriods();

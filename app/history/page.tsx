@@ -1,5 +1,5 @@
 import { getWeights } from "@/lib/weights";
-import { DeleteWeightButton } from "@/components/DeleteWeightButton";
+import { DeleteWeightButton } from "@/components/weights/DeleteWeightButton";
 
 export default function HistoryPage() {
   const weights = getWeights();

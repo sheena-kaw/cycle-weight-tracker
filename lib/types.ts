@@ -11,3 +11,10 @@ export type Period = {
 };
 
 export type Phase = "menstrual" | "follicular" | "ovulation" | "luteal";
+
+export type PhaseRange = {
+  phase: Phase;
+  start: string;   // 'YYYY-MM-DD', inclusive
+  end: string;      // 'YYYY-MM-DD', inclusive
+  estimated: boolean;
+};
