@@ -1,88 +1,109 @@
 # Cycle Weight Tracker
 
-A local-only Next.js web app for logging daily weight and menstrual periods, then charting weight against estimated cycle phases to show whether weight changes line up with the cycle (especially the luteal phase).
+A multi-user Next.js web app for logging daily weight and menstrual periods, then charting weight against estimated cycle phases to show whether weight changes line up with the cycle (especially the luteal phase). Each account only ever sees its own data.
 
 ## Scope
 
-- Single user, runs on localhost only
-- No authentication, no deployment
+- Multi-user, deployed (Vercel), with real accounts — not a local single-user tool anymore
+- Email + password authentication via Neon's Managed Better Auth
 - GitHub for collaboration (feature branches + pull requests)
 
-Out of scope: login, deployment, multiple users, kg/lb switching, symptom tracking, period predictions, notifications, data export. Do not add these unless asked.
+Out of scope: kg/lb switching, symptom tracking, period predictions beyond the current-cycle estimate already in `lib/phases`, notifications, data export, OAuth/social sign-in, admin tooling. Do not add these unless asked.
 
 ## Stack
 
 - Next.js (App Router) + TypeScript
 - Tailwind CSS
-- SQLite via `better-sqlite3` (synchronous, raw SQL, **no ORM**)
+- Neon Postgres (serverless) via `drizzle-orm` — schema-first, typed queries. No raw SQL string-building.
+- Neon Managed Better Auth (`@neondatabase/auth`, `@neondatabase/auth-ui`) for accounts/sessions
 - Recharts (charting)
 - date-fns (all date math)
 - Vitest (unit tests)
 - tsx (runs scripts)
+- Deployed on Vercel (first-party Neon integration)
 
 Do not add new dependencies without asking first.
 
 ## Commands
 
 ```bash
-npm run dev        # run with real data (dev.db)
-npm run demo       # regenerate sample data, then run with it
-npm run dev:demo   # run with existing sample data (demo.db)
-npm run seed       # regenerate sample data only
-npm test           # run Vitest
+npm run dev          # run the app
+npm run demo         # reseed the demo account, then run the app
+npm run seed         # reseed the demo account only
+npm run db:generate  # drizzle-kit generate — create a migration from schema changes
+npm run db:migrate   # drizzle-kit migrate — apply pending migrations
+npm test             # run Vitest
 ```
 
-## Data modes
+## Demo account
 
-- `DATA_MODE=demo` → `demo.db` (sample data). Otherwise → `dev.db` (real data).
-- `lib/db.ts` picks the file; all other code just imports `db`.
-- The seed script must refuse to run unless `DATA_MODE === "demo"`. It must never touch `dev.db`.
-- A banner in `app/layout.tsx` shows when demo mode is active.
-- `*.db` files are gitignored.
+- There is no separate demo branch — `app/db/index.ts` always connects to `DATABASE_URL` (the one real database).
+- `npm run seed` creates (or reuses) one fixed demo account via Neon Auth (`demo@cycletracker.app`), marks it email-verified, then wipes and regenerates that account's own `weight_entries`/`periods` rows. It never touches other users' rows — every write is scoped to that account's `user_id`.
+- `npm run demo` = `npm run seed` then `npm run dev`. Log in at `/auth/sign-in` with the printed demo credentials like any other account.
+- `.env*` files are gitignored; connection strings and auth secrets are never committed.
 
 ## Database
 
-```sql
-weight_entries (id INTEGER PK, date TEXT UNIQUE NOT NULL, weight REAL NOT NULL CHECK (weight > 0))
-periods        (id INTEGER PK, start_date TEXT UNIQUE NOT NULL, end_date TEXT NULL,
-                CHECK (end_date IS NULL OR end_date >= start_date))
+Schema lives in `app/db/schema.ts` as Drizzle table definitions, not hand-written SQL. Neon Managed Better Auth owns and maintains the `neon_auth` schema (`neon_auth.user`, with `id`, `name`, `email`, `emailVerified`, etc.) — that part is introspected via `drizzle-kit pull`, never hand-edited. Our own tables live in `public`:
+
+```ts
+weight_entries (id, user_id uuid -> neon_auth.user.id, date text, weight real not null check (weight > 0),
+                unique(user_id, date))
+periods        (id, user_id uuid -> neon_auth.user.id, start_date text, end_date text null,
+                check (end_date is null or end_date >= start_date),
+                unique(user_id, start_date))
 ```
 
-- Tables are created in `lib/db.ts` with `CREATE TABLE IF NOT EXISTS`.
-- One weight per date: logging the same date again replaces it (`INSERT ... ON CONFLICT(date) DO UPDATE`).
+**The uniqueness constraints are per-user, not global** — this is the one easy-to-miss change from the single-user version. `date` alone used to be globally unique; now two different users logging a weight on the same calendar date is completely normal and must not conflict. Same for `start_date` on periods.
+
+- Schema changes go through `npm run db:generate` then `npm run db:migrate` — never edit the database by hand.
+- One weight per date *per user*: logging the same date again for the same account replaces it (upsert on `(user_id, date)`).
 - Phases are **calculated** from periods, never stored.
-- Always use `?` placeholders. Never build SQL with string concatenation.
+- Every query against `weight_entries`/`periods` must filter by `user_id`. No exceptions — see Architecture rules below.
 
 ## File structure
 
 ```
 app/
-  layout.tsx          server — shell, nav, demo banner
-  page.tsx            server — dashboard: fetch data, run phases + insights
-  actions.ts          "use server" — all server actions
-  history/page.tsx    server — weight history
-  periods/page.tsx    server — period form + list
-components/           UI pieces; client components marked "use client"
+  layout.tsx            server — root shell (html/body, fonts, NeonAuthUIProvider); no nav — shared by auth and app routes
+  (app)/                 route group: the nav only wraps these, never the auth pages
+    layout.tsx            server — nav, resolves current user for the sign-out/email display
+    page.tsx              server — dashboard: resolve current user, fetch their data, run phases + insights
+    history/page.tsx      server — weight history
+    periods/page.tsx       server — period form + list
+  actions.ts            "use server" — all server actions; each resolves the current user before touching data
+  auth/[path]/page.tsx    — Neon Auth's sign-in / sign-up views (AuthView), outside the (app) group so no nav shows
+  api/auth/[...path]/route.ts  — Neon Auth's API handler
+  db/
+    index.ts             — Drizzle client (neon() + drizzle())
+    schema.ts             — Drizzle schema: introspected neon_auth tables + our app tables
+    relations.ts           — Drizzle relations, generated by drizzle-kit pull
+components/              UI pieces; client components marked "use client"
 lib/
-  db.ts               opens database, creates tables
-  types.ts            WeightEntry, Period, Phase, PhaseRange
-  weights.ts          getWeights, upsertWeight, deleteWeight
-  periods.ts          getPeriods, addPeriod, updatePeriod, deletePeriod
-  phases.ts           getPhaseRanges, getPhaseForDate (pure logic)
-  insights.ts         average weight per phase (pure logic)
-  *.test.ts           Vitest tests
+  auth/
+    server.ts             — createNeonAuth instance, used in server components/actions
+    client.ts               — createAuthClient instance, used in client components
+  types.ts                WeightEntry, Period, Phase, PhaseRange
+  weights/index.ts         getWeights, upsertWeight, deleteWeight — all take userId
+  periods/index.ts          getPeriods, addPeriod, updatePeriod, deletePeriod — all take userId
+  phases/index.ts            getPhaseRanges, getPhaseForDate (pure logic — no userId needed, operates on whatever periods array it's handed)
+  insights/index.ts           average weight per phase (pure logic)
+  *.test.ts                  Vitest tests
 scripts/
-  seed.ts             fills demo.db with sample data
+  seed.ts                   fills the demo branch with sample data for one fixed demo account
+drizzle/                    generated migration files
+drizzle.config.ts
+proxy.ts                     Next.js 16 request interceptor — redirects unauthenticated requests to /auth/sign-in for protected routes
 ```
 
 ## Architecture rules
 
-- **Data functions** (`lib/weights.ts`, `lib/periods.ts`): one SQL query each, no validation, no knowledge of forms or pages.
-- **Server actions** (`app/actions.ts`): receive form input → validate → call a data function → `revalidatePath` → return an error message on failure.
-- **Server components** (default): read data by calling data functions directly.
-- **Client components** (`"use client"`): only for interactivity (forms with error/pending state, chart, buttons with handlers). Never import `lib/db.ts` or data functions.
+- **Data functions** (`lib/weights`, `lib/periods`): one query each, no validation, no knowledge of forms or pages. **Every function takes `userId` as its first argument and filters by it.** A data function that doesn't scope by user is a bug, not a style choice — this is health data shared across many accounts now.
+- **Server actions** (`app/actions.ts`): resolve the current user via the auth session first (never trust a client-supplied user id) → validate form input → call a data function with that user's id → `revalidatePath` → return an error message on failure. If there's no session, treat it as an error rather than silently proceeding.
+- **Server components** (default): resolve the session the same way, then read data by calling data functions directly with that user's id.
+- **Client components** (`"use client"`): only for interactivity (forms with error/pending state, chart, buttons with handlers). Never import `app/db` or data functions directly — they only know the plain data passed down as props.
 - Props passed from server to client components must be plain, serializable data (strings, numbers, arrays, plain objects). No `Date` objects or functions.
-- `phases.ts` and `insights.ts` are pure TypeScript with no database or React imports, so they are easy to test.
+- `phases.ts` and `insights.ts` stay pure TypeScript with no database, auth, or React imports — they only ever see the data they're handed, so they don't need to know about users at all. That's exactly why they don't change in this migration.
 
 ## Dates
 
@@ -101,12 +122,12 @@ scripts/
 - Not in the future. Not more than 1 year in the past.
 
 **Periods**
-- Start date required, not in the future, not a duplicate.
-- End date optional; if given, on or after the start date.
+- Start date required, not in the future, not overlapping an existing period *for that same user*.
+- End date optional; if given, on or after the start date, not in the future.
 
 On invalid input: save nothing, return a clear message, and keep the user's input in the form.
 
-## Phase logic (`lib/phases.ts`)
+## Phase logic (`lib/phases`)
 
 For each period and the next period start:
 - **Menstrual:** start → end (assume start + 4 days if no end is logged)
@@ -117,9 +138,9 @@ For each period and the next period start:
 - **Current cycle:** estimate the next start from the average length of completed cycles; mark those ranges `estimated: true`
 - Fewer than 2 periods logged → no phases; UI explains why
 
-Write tests first for: normal cycle, day boundaries, missing end date, single period, short cycle, estimated current cycle.
+Unchanged by the multi-user migration — this function only ever sees one user's periods array at a time, passed in by whatever called it.
 
-## Insight (`lib/insights.ts`)
+## Insight (`lib/insights`)
 
 - Label each weight with its phase, excluding estimated days.
 - Average weight per phase; show luteal minus follicular difference (e.g. "+1.2 lb in your luteal phase").
@@ -135,13 +156,14 @@ Write tests first for: normal cycle, day boundaries, missing end date, single pe
 ## Logging
 
 - `console.log` / `console.error` in server actions with a consistent prefix, e.g. `[logWeight]`.
-- Log events (saved, rejected + reason, unexpected error), **not** the weight or health values themselves.
+- Log events (saved, rejected + reason, unexpected error), **not** the weight or health values themselves, and **not** the user's email — a user id is fine if needed for debugging, but never log anything that identifies a real person alongside their health data.
 
 ## UI notes
 
 - Tailwind, clean and simple, works at phone width.
 - Empty states for no weights, no periods, and too few periods for phases.
 - Show a note that phases are estimates, not medical advice.
+- Unauthenticated visitors to a protected route are redirected to `/auth/sign-in`, not shown an error page.
 
 ## How to work in this repo
 
@@ -149,12 +171,14 @@ Write tests first for: normal cycle, day boundaries, missing end date, single pe
 - Follow the existing patterns and the rules above rather than inventing new ones.
 - Explain what changed and why in a few sentences after each change.
 - If a request conflicts with these rules or needs a new dependency, ask first.
+- Don't run terminal/CLI commands on the person's behalf (installs, CLI tools, git operations, etc.) — tell them the exact command and why, and let them run it and report back the output.
 
 ## Build order
 
-1. Data layer (`lib/db.ts`, `lib/types.ts`), npm scripts
-2. Seed script; verify `demo.db` has realistic data
-3. Basic server component listing weights (end-to-end proof: SQLite → Next.js → browser)
+**Done (single-user foundation, built before this migration):**
+1. Data layer, npm scripts
+2. Seed script
+3. Basic server component listing weights
 4. Weight logging: data functions → server action with validation → `WeightForm`
 5. Weight history + delete
 6. Periods (same pattern)
@@ -163,4 +187,11 @@ Write tests first for: normal cycle, day boundaries, missing end date, single pe
 9. Chart
 10. Insight card + polish
 
-Nice to have if time allows: period calendar view, inline weight editing, Vitest tests for `lib/weights.ts`/`lib/periods.ts` data functions against an in-memory `better-sqlite3` instance (not required now — `phases.ts`/`insights.ts` pure-logic tests are the priority).
+**Now (multi-user migration):**
+11. Neon + Drizzle setup: create the Neon project and a demo branch, install Drizzle, write the `weight_entries`/`periods` schema with `user_id` columns and per-user unique constraints, `drizzle-kit pull` the `neon_auth` tables, generate and run the first migration.
+12. Neon Managed Better Auth integration: server/client auth instances, the `/api/auth/[...path]` handler, `/auth/[path]` sign-in/sign-up pages, `NeonAuthUIProvider` in `app/layout.tsx`, `proxy.ts` protecting the app's routes.
+13. Scope every data function and server action by `userId`: rewrite `lib/weights`/`lib/periods` to take it, rewrite `app/actions.ts` to resolve the session first, rewrite every server component to pass the signed-in user's id through.
+14. Update the seed script to create/reseed one fixed demo account on the demo branch.
+15. Deploy to Vercel, connect the Neon integration, verify the demo and real database branches are both reachable in their respective environments.
+
+Nice to have if time allows: period calendar view, inline weight editing, Vitest tests for `lib/weights`/`lib/periods` data functions.

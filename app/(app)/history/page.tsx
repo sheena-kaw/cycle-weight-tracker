@@ -1,12 +1,22 @@
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth/server";
 import { getWeights } from "@/lib/weights";
+import { WeightForm } from "@/components/weights/WeightForm";
 import { DeleteWeightButton } from "@/components/weights/DeleteWeightButton";
 
-export default function HistoryPage() {
-  const weights = getWeights();
+export default async function HistoryPage() {
+  const { data: session } = await auth.getSession();
+  const user = session?.user;
+  if (!user) redirect("/auth/sign-in");
+
+  const weights = await getWeights(user.id);
 
   return (
     <main className="flex-1 p-8">
-      <h1 className="text-xl font-semibold mb-4">Weight history</h1>
+      <h1 className="text-xl font-semibold mb-4">Log a weight</h1>
+      <WeightForm />
+
+      <h2 className="text-lg font-semibold mb-4 mt-8">Weight history</h2>
       {weights.length === 0 ? (
         <p>No weights logged yet.</p>
       ) : (

@@ -1,21 +1,38 @@
-import { db } from "@/lib/db";
+import { and, asc, eq } from "drizzle-orm";
+import { db } from "@/app/db";
+import { weightEntries } from "@/app/db/schema";
 import type { WeightEntry } from "@/lib/types";
 
-export function getWeights(): WeightEntry[] {
+export async function getWeights(userId: string): Promise<WeightEntry[]> {
   return db
-    .prepare("SELECT id, date, weight FROM weight_entries ORDER BY date ASC")
-    .all() as WeightEntry[];
+    .select({
+      id: weightEntries.id,
+      date: weightEntries.date,
+      weight: weightEntries.weight,
+    })
+    .from(weightEntries)
+    .where(eq(weightEntries.userId, userId))
+    .orderBy(asc(weightEntries.date));
 }
 
-// Saves a weight entry for a given date.
+// Saves a weight entry for a given date for this user.
 // If an entry already exists for that date, updates it with the new weight.
-export function upsertWeight(date: string, weight: number): void {
-  db.prepare(
-    `INSERT INTO weight_entries (date, weight) VALUES (?, ?)
-     ON CONFLICT(date) DO UPDATE SET weight = excluded.weight`
-  ).run(date, weight);
+export async function upsertWeight(
+  userId: string,
+  date: string,
+  weight: number
+): Promise<void> {
+  await db
+    .insert(weightEntries)
+    .values({ userId, date, weight })
+    .onConflictDoUpdate({
+      target: [weightEntries.userId, weightEntries.date],
+      set: { weight },
+    });
 }
 
-export function deleteWeight(id: number): void {
-  db.prepare("DELETE FROM weight_entries WHERE id = ?").run(id);
+export async function deleteWeight(userId: string, id: number): Promise<void> {
+  await db
+    .delete(weightEntries)
+    .where(and(eq(weightEntries.id, id), eq(weightEntries.userId, userId)));
 }
