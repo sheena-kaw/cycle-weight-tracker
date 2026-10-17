@@ -1,14 +1,19 @@
 import { format } from "date-fns";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth/server";
 import { getPeriods } from "@/lib/periods";
 import { getPhaseRanges, getPhaseForDate } from "@/lib/phases";
 import { getWeights } from "@/lib/weights";
-import { WeightForm } from "@/components/weights/WeightForm";
 import { Chart } from "@/components/Chart";
 
-export default function Home() {
-  const periods = getPeriods();
+export default async function Home() {
+  const { data: session } = await auth.getSession();
+  const user = session?.user;
+  if (!user) redirect("/auth/sign-in");
+
+  const periods = await getPeriods(user.id);
   const ranges = getPhaseRanges(periods);
-  const weights = getWeights();
+  const weights = await getWeights(user.id);
   const today = format(new Date(), "yyyy-MM-dd");
   const todayStatus = getPhaseForDate(today, ranges);
 
@@ -36,11 +41,6 @@ export default function Home() {
 
       <h2 className="text-lg font-semibold mb-4">Weight over time</h2>
       <Chart weights={weights} ranges={ranges} />
-
-      <h2 className="text-lg font-semibold mb-4 mt-8">
-        Log today&apos;s weight
-      </h2>
-      <WeightForm />
     </main>
   );
 }

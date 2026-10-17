@@ -7,14 +7,22 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "DATA_MODE=demo tsx scripts/seed.ts",
-    "demo": "npm run seed && npm run dev:demo",
-    "dev:demo": "DATA_MODE=demo next dev",
-    "test": "vitest"
+    "seed": "node --env-file=.env.local node_modules/.bin/tsx scripts/seed.ts",
+    "demo": "npm run seed && npm run dev",
+    "test": "vitest",
+    "db:pull": "node --env-file=.env.local node_modules/.bin/drizzle-kit pull",
+    "db:generate": "node --env-file=.env.local node_modules/.bin/drizzle-kit generate",
+    "db:migrate": "node --env-file=.env.local node_modules/.bin/drizzle-kit migrate"
   },
   "dependencies": {
+    "@neon/config": "^1.8.4",
+    "@neon/env": "^1.5.1",
+    "@neondatabase/auth": "0.6.0-beta",
+    "@neondatabase/auth-ui": "0.4.0-beta",
+    "@neondatabase/serverless": "^1.2.0",
     "better-sqlite3": "^12.11.1",
     "date-fns": "^4.4.0",
+    "drizzle-orm": "^0.45.3",
     "next": "16.3.6",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -26,11 +34,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.11",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "ws": "^8.22.0"
   }
 }

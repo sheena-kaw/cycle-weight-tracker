@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { addDays, format, isValid, parseISO, subYears } from "date-fns";
+import { auth } from "@/lib/auth/server";
 import { deleteWeight, upsertWeight } from "@/lib/weights";
 import { addPeriod, deletePeriod, getPeriods } from "@/lib/periods";
 
@@ -17,6 +18,13 @@ export async function logWeight(
   _prevState: string | null,
   formData: FormData
 ): Promise<string | null> {
+  const { data: session } = await auth.getSession();
+  const user = session?.user;
+  if (!user) {
+    console.error("[logWeight] rejected: no session");
+    return "You must be signed in to log a weight.";
+  }
+
   const weightRaw = formData.get("weight");
   const weight = Number(weightRaw);
 
@@ -58,7 +66,7 @@ export async function logWeight(
   const roundedWeight = Math.round(weight * 10) / 10;
 
   try {
-    upsertWeight(dateStr, roundedWeight);
+    await upsertWeight(user.id, dateStr, roundedWeight);
   } catch (error) {
     console.error("[logWeight] unexpected error", error);
     return "Something went wrong saving your weight. Please try again.";
@@ -74,7 +82,13 @@ export async function logWeight(
 // (e.g. a delete button's onClick), not from a <form action>, so it takes
 // a plain id argument instead of FormData.
 export async function deleteWeightAction(id: number): Promise<void> {
-  deleteWeight(id);
+  const { data: session } = await auth.getSession();
+  const user = session?.user;
+  if (!user) {
+    console.error("[deleteWeightAction] rejected: no session");
+    return;
+  }
+  await deleteWeight(user.id, id);
   revalidatePath("/history");
 }
 
@@ -86,6 +100,13 @@ export async function addPeriodAction(
   _prevState: string | null,
   formData: FormData
 ): Promise<string | null> {
+  const { data: session } = await auth.getSession();
+  const user = session?.user;
+  if (!user) {
+    console.error("[addPeriod] rejected: no session");
+    return "You must be signed in to log a period.";
+  }
+
   const startRaw = formData.get("start_date");
   const startDate = typeof startRaw === "string" ? startRaw : "";
 
@@ -129,7 +150,8 @@ export async function addPeriodAction(
 
   const proposedEnd = endDate ? parseISO(endDate) : addDays(start, 4);
 
-  const overlaps = getPeriods().some((p) => {
+  const existingPeriods = await getPeriods(user.id);
+  const overlaps = existingPeriods.some((p) => {
     const existingStart = parseISO(p.start_date);
     const existingEnd = p.end_date
       ? parseISO(p.end_date)
@@ -143,7 +165,7 @@ export async function addPeriodAction(
   }
 
   try {
-    addPeriod(startDate, endDate);
+    await addPeriod(user.id, startDate, endDate);
   } catch (error) {
     console.error("[addPeriod] unexpected error", error);
     return "Something went wrong saving this period. Please try again.";
@@ -155,6 +177,12 @@ export async function addPeriodAction(
 }
 
 export async function deletePeriodAction(id: number): Promise<void> {
-  deletePeriod(id);
+  const { data: session } = await auth.getSession();
+  const user = session?.user;
+  if (!user) {
+    console.error("[deletePeriodAction] rejected: no session");
+    return;
+  }
+  await deletePeriod(user.id, id);
   revalidatePath("/periods");
 }

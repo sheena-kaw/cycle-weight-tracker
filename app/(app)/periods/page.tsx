@@ -1,9 +1,15 @@
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth/server";
 import { getPeriods } from "@/lib/periods";
 import { PeriodForm } from "@/components/periods/PeriodForm";
 import { DeletePeriodButton } from "@/components/periods/DeletePeriodButton";
 
-export default function PeriodsPage() {
-  const periods = getPeriods();
+export default async function PeriodsPage() {
+  const { data: session } = await auth.getSession();
+  const user = session?.user;
+  if (!user) redirect("/auth/sign-in");
+
+  const periods = await getPeriods(user.id);
 
   return (
     <main className="flex-1 p-8">
